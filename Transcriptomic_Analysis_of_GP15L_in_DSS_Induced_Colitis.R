@@ -57,7 +57,7 @@ sample_info
 
 str(counts)
 #run DESeq2
-
+library(DESeq2)
 dds <- DESeqDataSetFromMatrix(
   countData = counts,
   colData = sample_info,
@@ -151,17 +151,26 @@ top_genes <- res_df %>%
 
 head(top_genes, 20)
 
+#Checking for top 30 genes
+
+head(top30)
+
+head(rownames(norm_counts))
+
+sum(top30 %in% rownames(norm_counts))
+
+res_sorted <- res_df[order(res_df$padj), ]
+top30 <- rownames(res_sorted)[1:30]
+head(top30)
 #creating the heatmap
 
 library(dplyr)
 library(pheatmap)
 
-res_df <- as.data.frame(res) %>%
-  rownames_to_column("gene") %>%
-  filter(!is.na(padj)) %>%
-  arrange(padj)
 
-top30 <- res_df$gene[1:30]
+res_sorted <- res_df[order(res_df$padj), ]
+top30 <- rownames(res_sorted)[1:30]
+head(top30)
 
 vsd <- vst(dds, blind = FALSE)
 norm_counts <- assay(vsd)
@@ -190,24 +199,13 @@ BiocManager::install("AnnotationDbi")
 
 #convert Ensembles to actual gene names
 
-library(org.Mm.eg.db)
-library(AnnotationDbi)
 
-top_genes$symbol <- mapIds(
-  org.Mm.eg.db,
-  keys = top_genes$gene,
-  column = "SYMBOL",
-  keytype = "ENSEMBL",
-  multiVals = "first"
-)
-
-head(top_genes[, c("gene","symbol","log2FoldChange","padj")], 20)
+head(rownames(heatmap_data))
 
 
-
-resultsNames(dds)
 
 #Separating Colon samples from LPMC
+library(tidyverse)
 
 res_colon <- results(
   dds,
@@ -217,27 +215,24 @@ res_colon <- results(
 res_colon_df <- as.data.frame(res_colon) %>%
   rownames_to_column("gene") %>%
   arrange(padj)
+
 res_colon_KO_vs_WT <- results(
   dds,
   contrast = c("condition", "Colon_GPR15L_KO_DSS", "Colon_WT_DSS")
 )
-
-res_colon_KO_vs_WT_df <- as.data.frame(res_colon_KO_vs_WT) %>%
-  rownames_to_column("gene") %>%
-  arrange(padj)
-head(res_colon_KO_vs_WT_df)
+head(res_colon_KO_vs_WT)
 
 summary(res_colon_KO_vs_WT)
 
 head(
-  res_colon_KO_vs_WT_df[
-    order(res_colon_KO_vs_WT_df$padj),
+  res_colon_KO_vs_WT[
+    order(res_colon_KO_vs_WT$padj),
   ],
   20
 )
 levels(dds$condition)
 
-head(res_colon_KO_vs_WT_df)
+head(res_colon_KO_vs_WT)
 
 #Volcano Plot for Colon Samples
 
@@ -283,14 +278,16 @@ library(tibble)
 library(ggplot2)
 library(pheatmap)
 
-vsd <- vst(dds, blind = FALSE)
-norm_counts <- assay(vsd)
+res_colon_df <- as.data.frame(res_colon)
+res_colon_df$gene <- rownames(res_colon_df)
 
 top30_colon <- res_colon_df %>%
   filter(!is.na(padj)) %>%
   arrange(padj) %>%
-  slice(1:30) %>%
+  dplyr::slice(1:30) %>%   
   pull(gene)
+
+
 
 colon_samples <- c(
   "Colon_WT_DSS_1",
@@ -370,7 +367,7 @@ ggplot(volcano_LPMC,
 top30_LPMC <- res_LPMC_df %>%
   filter(!is.na(padj)) %>%
   arrange(padj) %>%
-  slice(1:30) %>%
+  dplyr::slice(1:30) %>%  # Added dplyr:: here to fix the conflict
   pull(gene)
 
 LPMC_samples <- c(
@@ -431,7 +428,7 @@ sig_colon <- res_colon_df %>%
 
 nrow(sig_colon)
 
-
+library(clusterProfiler)
 
 gene_conversion <- bitr(
   sig_colon$gene,
@@ -441,6 +438,7 @@ gene_conversion <- bitr(
 )
 
 head(gene_conversion)
+head(gene_conversion,20)
 
 go_colon <- enrichGO(
   gene = gene_conversion$ENTREZID,
@@ -474,15 +472,14 @@ dotplot(
 #KEGG enrichment pathway for Colon
 
 kegg_colon <- enrichKEGG(
-  gene = gene_conversion$ENTREZID,
-  organism = "mmu",
-  pvalueCutoff = 0.05
+  gene          = gene_conversion$ENTREZID,
+  organism      = "mmu",
+  keyType       = "ncbi-geneid",   
+  pvalueCutoff  = 1,               
+  qvalueCutoff  = 1                
 )
+head(as.data.frame(kegg_colon))
 
-head(kegg_colon)
-
-
-as.data.frame(kegg_colon)
 
 dotplot(
   kegg_colon,
@@ -571,3 +568,62 @@ mapIds(
   keytype = "ENSEMBL",
   multiVals = "first"
 )
+
+#Identifying significant genes for Colon
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+library(dplyr)
+
+res_colon_df$symbol <- mapIds(
+  org.Mm.eg.db,
+  keys = res_colon_df$gene,
+  column = "SYMBOL",
+  keytype = "ENSEMBL",
+  multiVals = "first"
+)
+
+res_colon_df %>%
+  filter(!is.na(padj)) %>%
+  arrange(padj) %>%
+  select(gene, symbol, baseMean, log2FoldChange, pvalue, padj) %>%
+  head(20)
+
+sig_colon_named <- res_colon_df %>%
+  filter(
+    !is.na(padj),
+    padj < 0.05,
+    abs(log2FoldChange) > 1
+  ) %>%
+  arrange(padj) %>%
+  select(gene, symbol, baseMean, log2FoldChange, pvalue, padj)
+
+head(sig_colon_named, 20)
+#Bargraph for significant genes
+
+library(ggplot2)
+
+sig_counts <- data.frame(
+  Tissue = c("Colon", "LPMC"),
+  Significant_Genes = c(148, 10)
+)
+
+ggplot(sig_counts,
+       aes(x = Tissue,
+           y = Significant_Genes,
+           fill = Tissue)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  theme_minimal() +
+  labs(
+    title = "Significant Genes Identified by Tissue Type",
+    subtitle = "Comparison of differential expression results between colon tissue and LPMCs",
+    x = "Tissue Type",
+    y = "Number of Significant Genes"
+  ) +
+  geom_text(
+    aes(label = Significant_Genes),
+    vjust = -0.5,
+    size = 5
+  ) +
+  theme(
+    legend.position = "none"
+  )
