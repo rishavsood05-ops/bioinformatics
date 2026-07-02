@@ -1,0 +1,50 @@
+import matplotlib.pyplot as plt
+
+# Set clean native style
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Arial', 'Liberation Sans', 'DejaVu Sans']
+
+# Data from your MutaBind2 job summary
+mutations = ['E558F\n(Deleterious)']
+ddg_values = [1.94]
+
+# Create figure window
+fig, ax = plt.subplots(figsize=(5, 6))
+
+# Plot the bar with a professional crimson/coral color palette
+bar = ax.bar(mutations, ddg_values, color='#d9534f', edgecolor='black', width=0.4, linewidth=1.5)
+
+# Style the axes
+ax.set_ylabel('$\\Delta\\Delta$G (kcal/mol)', fontsize=14, fontweight='bold', labelpad=12)
+ax.set_title('Predicted Binding Free Energy Shift', fontsize=14, fontweight='bold', pad=20)
+ax.set_ylim(0, 2.5)
+
+# Clean up borders (remove top and right spines for a clean look)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.spines['left'].set_linewidth(1.5)
+ax.spines['bottom'].set_linewidth(1.5)
+
+# Format ticks
+ax.tick_params(axis='both', which='major', labelsize=12, width=1.5)
+
+# Add exact value label on top of the bar
+for rect in bar:
+    height = rect.get_height()
+    ax.annotate(f'+{height:.2f}\nkcal/mol',
+                xy=(rect.get_x() + rect.get_width() / 2, height),
+                xytext=(0, 8),  # 8 points vertical offset
+                textcoords="offset points",
+                ha='center', va='bottom', fontsize=12, fontweight='bold', color='#333333')
+
+# Add a text card callout box explaining the physical affinity drop
+info_text = "Affinity Impact:\n~23.3-Fold Decrease\nin Trastuzumab Binding\n($K_d$ Shift at 310.15 K)"
+ax.text(0.75, 1.2, info_text, transform=ax.transData, fontsize=11,
+        verticalalignment='center', horizontalalignment='left',
+        bbox=dict(boxstyle='round,pad=0.8', facecolor='#f8f9fa', edgecolor='#cccccc', linewidth=1))
+
+# Adjust layout and save high-resolution image
+info_text = "Biochemical Impact:\n~23.3-Fold Decrease\nin Trastuzumab Binding\n($K_d$ Shift at 310.15 K)"
+ax.text(0.55, 0.5, info_text, transform=ax.transAxes, fontsize=10,
+        verticalalignment='center', horizontalalignment='left',
+        bbox=dict(boxstyle='round,pad=0.6', facecolor='#f8f9fa', edgecolor='#cccccc', linewidth=1))
